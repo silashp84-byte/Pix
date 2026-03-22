@@ -1,0 +1,5 @@
+{
+  "name": "PixConnect",
+  "description": "Plataforma para transferências PIX via API com segurança e rapidez.",
+  "requestFramePermissions": []
+}
