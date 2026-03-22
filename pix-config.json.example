@@ -1,0 +1,8 @@
+{
+  "clientId": "SUA_CLIENT_ID",
+  "clientSecret": "SUA_CLIENT_SECRET",
+  "certificatePath": "./certs/pix-certificate.p12",
+  "apiUrl": "https://api-pix.gerencianet.com.br",
+  "timeoutMs": 10000,
+  "logLevel": "info"
+}

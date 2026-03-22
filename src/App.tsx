@@ -25,7 +25,7 @@ export default function App() {
   const [history, setHistory] = useState<Transfer[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const [status, setStatus] = useState<{ mode: string; configured: boolean; usingCertificate: boolean; maxTransferValue: number; simulationEnabled: boolean } | null>(null);
+  const [status, setStatus] = useState<{ maxTransferValue: number; balance: number; certificatePath: string } | null>(null);
 
   // Load history and status
   useEffect(() => {
@@ -76,6 +76,12 @@ export default function App() {
 
       setHistory(prev => [newTransfer, ...prev]);
       setResult({ success: true, message: data.message || 'Transferência realizada com sucesso!' });
+      
+      // Update balance if returned
+      if (data.newBalance !== undefined) {
+        setStatus(prev => prev ? { ...prev, balance: data.newBalance } : null);
+      }
+
       setKey('');
       setValue('');
     } catch (error: any) {
@@ -108,13 +114,6 @@ export default function App() {
             </h1>
             <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
               Transferências instantâneas e seguras
-              {status && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                  status.mode === 'public' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {status.mode === 'public' ? 'Client Público' : 'Client Privado'}
-                </span>
-              )}
             </p>
           </div>
           <button 
@@ -127,6 +126,28 @@ export default function App() {
         </header>
 
         <main>
+          {/* Wallet Balance Card */}
+          {status && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-emerald-600 rounded-3xl p-6 mb-6 text-white shadow-xl shadow-emerald-600/20"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-widest opacity-80 mb-1">Saldo em Carteira</p>
+                  <h2 className="text-4xl font-bold tracking-tight">
+                    R$ {status.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h2>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-medium uppercase tracking-widest opacity-60 mb-1">Certificado PIX</p>
+                  <p className="text-xs font-mono opacity-90">{status.certificatePath}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Main Card */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
