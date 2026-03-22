@@ -25,6 +25,10 @@ class PixClient {
   private tokenExpiry: number = 0;
 
   private isPublic: boolean = false;
+  private timeoutMs: number;
+  private maxTransferValue: number;
+  private enableSimulation: boolean;
+  private logLevel: string;
 
   constructor() {
     this.clientId = process.env.PIX_CLIENT_ID || '';
@@ -32,14 +36,27 @@ class PixClient {
     this.certificatePath = process.env.PIX_CERTIFICATE_PATH || '';
     this.apiUrl = process.env.PIX_API_URL || 'https://api-pix.gerencianet.com.br';
     this.isPublic = process.env.PIX_MODE === 'public';
+    this.timeoutMs = parseInt(process.env.PIX_TIMEOUT_MS || '10000');
+    this.maxTransferValue = parseFloat(process.env.PIX_MAX_TRANSFER_VALUE || '5000.00');
+    this.enableSimulation = process.env.PIX_ENABLE_SIMULATION === 'true';
+    this.logLevel = process.env.PIX_LOG_LEVEL || 'info';
   }
 
   getStatus() {
     return {
       mode: this.isPublic ? 'public' : 'private',
       configured: !!(this.clientId && this.clientSecret),
-      usingCertificate: !!(this.certificatePath && fs.existsSync(this.certificatePath))
+      usingCertificate: !!(this.certificatePath && fs.existsSync(this.certificatePath)),
+      maxTransferValue: this.maxTransferValue,
+      simulationEnabled: this.enableSimulation
     };
+  }
+
+  public log(level: string, message: string, data?: any) {
+    const levels = ['debug', 'info', 'warn', 'error'];
+    if (levels.indexOf(level) >= levels.indexOf(this.logLevel)) {
+      console.log(`[${level.toUpperCase()}] ${message}`, data || '');
+    }
   }
 
   private async getAccessToken() {
@@ -51,9 +68,9 @@ class PixClient {
       throw new Error('PIX_CLIENT_ID and PIX_CLIENT_SECRET are required.');
     }
 
+    this.log('info', 'Refreshing PIX access token...');
     const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     
-    // Most PIX APIs require a certificate for OAuth too
     const httpsAgent = this.certificatePath && fs.existsSync(this.certificatePath)
       ? new https.Agent({ pfx: fs.readFileSync(this.certificatePath), passphrase: '' })
       : undefined;
@@ -66,49 +83,56 @@ class PixClient {
             Authorization: `Basic ${auth}`,
             'Content-Type': 'application/json'
           },
-          httpsAgent
+          httpsAgent,
+          timeout: this.timeoutMs
         }
       );
 
       this.accessToken = response.data.access_token;
-      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
+      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
+      this.log('info', 'Access token refreshed successfully.');
       return this.accessToken;
     } catch (error: any) {
-      console.error('Error getting PIX access token:', error.response?.data || error.message);
+      this.log('error', 'Error getting PIX access token:', error.response?.data || error.message);
       throw new Error('Failed to authenticate with PIX API.');
     }
   }
 
   async sendPix(key: string, value: string) {
-    // In a real scenario, this would call the /v2/pix endpoint for immediate transfers
-    // or /v2/gn/pix/evp for keys.
-    // Note: Different providers have different endpoints for "PIX Out".
-    // This is a generic implementation for a PIX transfer.
-    
+    const numericValue = parseFloat(value);
+    if (numericValue > this.maxTransferValue) {
+      throw new Error(`O valor excede o limite máximo de R$ ${this.maxTransferValue.toLocaleString('pt-BR')}`);
+    }
+
     const token = await this.getAccessToken();
     const httpsAgent = this.certificatePath && fs.existsSync(this.certificatePath)
       ? new https.Agent({ pfx: fs.readFileSync(this.certificatePath), passphrase: '' })
       : undefined;
 
+    this.log('info', `Initiating PIX transfer to key: ${key}, value: ${value}`);
     try {
-      // Example endpoint for Efí (Gerencianet) PIX Out
       const response = await axios.post(`${this.apiUrl}/v2/pix`, {
         valor: value,
         chave: key,
-        // Other required fields like 'pagador' or 'infoPagador' would go here
       }, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        httpsAgent
+        httpsAgent,
+        timeout: this.timeoutMs
       });
 
+      this.log('info', 'PIX transfer successful.');
       return response.data;
     } catch (error: any) {
-      console.error('Error sending PIX:', error.response?.data || error.message);
+      this.log('error', 'Error sending PIX:', error.response?.data || error.message);
       throw error.response?.data || new Error('Failed to send PIX.');
     }
+  }
+
+  isSimulationEnabled() {
+    return this.enableSimulation && (!this.clientId || !this.clientSecret);
   }
 }
 
@@ -126,9 +150,9 @@ app.post('/api/pix/transfer', async (req, res) => {
     return res.status(400).json({ error: 'Chave e valor são obrigatórios.' });
   }
 
-  // Check if we have credentials, otherwise simulate for demo
-  if (!process.env.PIX_CLIENT_ID || !process.env.PIX_CLIENT_SECRET) {
-    console.log('Simulating PIX transfer (No credentials provided)');
+  // Check if we should use simulation mode
+  if (pixClient.isSimulationEnabled()) {
+    pixClient.log('info', 'Simulating PIX transfer (Simulation mode enabled)');
     await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
     return res.json({
       status: 'success',

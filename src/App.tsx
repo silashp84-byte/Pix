@@ -25,7 +25,7 @@ export default function App() {
   const [history, setHistory] = useState<Transfer[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const [status, setStatus] = useState<{ mode: string; configured: boolean; usingCertificate: boolean } | null>(null);
+  const [status, setStatus] = useState<{ mode: string; configured: boolean; usingCertificate: boolean; maxTransferValue: number; simulationEnabled: boolean } | null>(null);
 
   // Load history and status
   useEffect(() => {
@@ -162,10 +162,16 @@ export default function App() {
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder="0,00"
+                    max={status?.maxTransferValue}
                     className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                     required
                   />
                 </div>
+                {status && (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Limite máximo por transferência: <span className="font-semibold text-gray-600">R$ {status.maxTransferValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </p>
+                )}
               </div>
 
               <button
